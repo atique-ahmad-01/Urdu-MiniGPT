@@ -8,12 +8,14 @@
 
 SentencePiece Unigram tokenizer (2,000 tokens) + a decoder-only Transformer written in PyTorch. No pretrained weights.
 
-📄 **[Read the full report (PDF)](report/report.pdf)**
+🚀 **[Live demo](https://urdu-minigpt.streamlit.app)** · 📄 **[Read the full report (PDF)](report/report.pdf)**
 
 ![python 3.10 | 3.11](https://img.shields.io/badge/python-3.10%20%7C%203.11-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
 ![SentencePiece](https://img.shields.io/badge/SentencePiece-Unigram-4338CA)
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://urdu-minigpt.streamlit.app)
 
 <img src="docs/demo.gif" alt="Urdu-MiniGPT Streamlit app demo" width="900" />
 
