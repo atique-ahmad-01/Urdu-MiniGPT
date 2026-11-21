@@ -1,0 +1,6 @@
+streamlit>=1.50
+torch
+sentencepiece
+pandas<2.3
+numpy<2
+pyarrow<19
