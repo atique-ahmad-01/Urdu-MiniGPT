@@ -1,0 +1,22 @@
+Training on cuda
+step   250 | train 5.8385 | val 5.8331 | 2s
+step   500 | train 5.2803 | val 5.3691 | 3s
+step   750 | train 4.9832 | val 5.1911 | 5s
+step  1000 | train 4.8149 | val 5.0712 | 6s
+step  1250 | train 4.6556 | val 4.9872 | 8s
+step  1500 | train 4.5512 | val 4.9280 | 9s
+step  1750 | train 4.4652 | val 4.9173 | 11s
+step  2000 | train 4.3792 | val 4.8819 | 12s
+step  2250 | train 4.2962 | val 4.8765 | 14s
+step  2500 | train 4.2247 | val 4.8603 | 15s
+step  2750 | train 4.1686 | val 4.8737 | 17s
+step  3000 | train 4.0989 | val 4.8418 | 18s
+step  3250 | train 4.0487 | val 4.8411 | 20s
+step  3500 | train 3.9749 | val 4.8256 | 21s
+step  3750 | train 3.9513 | val 4.8465 | 23s
+step  4000 | train 3.8712 | val 4.8119 | 24s
+step  4250 | train 3.7755 | val 4.8085 | 26s
+step  4500 | train 3.7557 | val 4.8073 | 27s
+step  4750 | train 3.6848 | val 4.7917 | 29s
+step  5000 | train 3.6456 | val 4.8094 | 30s
+Best val loss 4.7917, training time 0.5 min
