@@ -8,6 +8,8 @@
 
 SentencePiece Unigram tokenizer (2,000 tokens) + a decoder-only Transformer written in PyTorch. No pretrained weights.
 
+📄 **[Read the full report (PDF)](report/report.pdf)**
+
 ![python 3.10 | 3.11](https://img.shields.io/badge/python-3.10%20%7C%203.11-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
 ![SentencePiece](https://img.shields.io/badge/SentencePiece-Unigram-4338CA)
@@ -95,7 +97,7 @@ Sample output:
 پاکستان کے بعد کیا گیا جبکہ ان کا ساتھ ہو گا۔ پاکستان کرکٹ بورڈ کے ساتھ ...
 ```
 
-The model captures the news style but the meaning drifts — expected at this scale. Full results are in [`results/`](results/).
+The model captures the news style but the meaning drifts — expected at this scale. Full results are in [`results/`](results/) and the [report](report/report.pdf).
 
 ## Streamlit app
 
