@@ -1,0 +1,218 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[hidelinks]{hyperref}
+\providecommand\UseMathForPositioningText{}  % needed by this bidi version with the current array package
+\usepackage{polyglossia}   % loads bidi, which must come last
+\setmainlanguage{english}
+\setotherlanguage{urdu}
+\setmainfont{Charter}
+\setsansfont{Helvetica Neue}
+\setmonofont[Scale=0.85]{Menlo}
+\newfontfamily\urdufont[Script=Arabic,Scale=0.95]{Noto Nastaliq Urdu}
+
+\definecolor{wordstart}{HTML}{1D4ED8}
+\newcommand{\ur}[1]{\texturdu{#1}}
+\newcommand{\ws}[1]{\textcolor{wordstart}{#1}}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\linespread{1.08}
+
+\title{\textbf{Urdu-MiniGPT}\\[0.3em]\large Assignment 3: a small GPT for Urdu with a SentencePiece Unigram tokenizer}
+\author{MSDS25010 \quad\textbar\quad MSDS25025 \quad\textbar\quad MSDS25030 \quad\textbar\quad MSDS25065}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We trained a small decoder-only Transformer to write Urdu, starting from nothing: our own tokenizer, our own model code, and no pretrained weights. Our group was assigned the SentencePiece \textbf{Unigram} tokenizer, which we trained on \texttt{train.txt} only, with a vocabulary of exactly 2{,}000 tokens. After tuning a few settings on the validation set, our final model has 5.8M parameters, trains in under a minute on one GPU, and reaches a test loss of \textbf{4.822} (perplexity \textbf{124.3}). Its first guess for the next token is right \textbf{17.5\%} of the time on the test set. The generated text reads like Urdu news and uses the right vocabulary, but it loses the thread after a sentence or two.
+\end{abstract}
+
+\section{What we had to do}
+
+The brief asked every group to clean the supplied Urdu data, train the assigned tokenizer with a 2{,}000-token target, encode all three splits with it, build and train a MiniGPT from scratch, and then evaluate on the test set only after the model was final. We kept to the rules throughout: the tokenizer never saw validation or test text, we did not re-split the data, and every design choice was made by looking at the validation set.
+
+\section{Data and cleaning}
+
+We used the \texttt{Urdu\_MiniGPT\_Dataset.zip} from the course, taken from the ALIF Urdu Corpus. It is Urdu news text with one document per line.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrl}
+\toprule
+Split & Characters & Documents & Tokens & Used for \\
+\midrule
+train & 800{,}016 & 547 & 269{,}379 & tokenizer and model training \\
+val   &  99{,}547 &  81 &  34{,}362 & early stopping, choosing settings \\
+test  & 100{,}884 &  70 &  35{,}014 & final scores only \\
+\bottomrule
+\end{tabular}
+\caption{The three splits. Token counts are after encoding with our tokenizer, including one end-of-document token per document.}
+\end{table}
+
+Before changing anything we wrote a small audit script to look at the characters in each file. The text was in better shape than we expected. The Urdu letters were already the correct Unicode characters, and there were no hidden control characters. We found 89 cases where \ur{آ} was stored as two separate code points, so we applied Unicode NFC normalisation, which joins them back into one character. We also removed empty lines. We kept diacritics, the \ur{ﷺ} sign and the occasional English word, because they are part of real Urdu text.
+
+One problem only showed up when we first trained the tokenizer. SentencePiece silently skips input lines that are longer than its maximum length, and because each document is a single long line, \textbf{54\% of the training text was being ignored}. We fixed this by splitting the training documents into sentences (after \ur{۔}, \ur{؟} and \texttt{!}) into a separate file used only for tokenizer training. The model itself still trains on whole documents.
+
+\section{Tokenizer}
+
+The Unigram method starts with a very large set of candidate pieces, gives each a probability, and keeps removing the pieces that matter least until the target size is reached. To encode a word it picks the most likely way to split it.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{l l >{\raggedright\arraybackslash}p{0.33\textwidth}}
+\toprule
+Setting & Value & Why \\
+\midrule
+\texttt{model\_type} & \texttt{unigram} & assigned to our group \\
+\texttt{vocab\_size} & 2{,}000 (actual: 2{,}000) & required; special tokens included \\
+training input & train sentences only & rule of the assignment \\
+\texttt{character\_coverage} & 1.0 & keep every Urdu character \\
+\texttt{normalization\_rule\_name} & \texttt{identity} & we had already normalised \\
+\texttt{split\_digits} & true & numbers should not use up vocabulary slots \\
+\texttt{byte\_fallback} & false & saves 256 slots for real pieces \\
+special tokens & \texttt{<unk>}=0, \texttt{<s>}=1, \texttt{</s>}=2, \texttt{<pad>}=3 & \\
+\bottomrule
+\end{tabular}
+\caption{Tokenizer settings.}
+\end{table}
+
+Table~\ref{tab:tokdemo} shows the tokenizer on five sentences. Pieces in \ws{blue} start a new word. Common words such as \ur{پاکستان} and \ur{میچ} are single tokens. Plural and verb endings are split off: \ur{کھلاڑیوں} becomes \ur{کھلاڑی} followed by \ur{وں}, and rarer words fall apart into small pieces or single letters (\ur{یکطرفہ}). Numbers are always split into single digits, as we asked.
+
+\begin{table}[H]
+\centering
+\small
+%%TOKDEMO%%
+\caption{Five example sentences, their token pieces (read right to left, separated by $|$) and the number of tokens. Blue pieces begin a word.}
+\label{tab:tokdemo}
+\end{table}
+
+\section{The MiniGPT model}
+
+We wrote the model ourselves in about 100 lines of PyTorch (\texttt{src/model.py}). It is a standard decoder-only Transformer: token and position embeddings, a stack of blocks, a final LayerNorm, and a linear layer that gives a score for each of the 2{,}000 tokens. Each block has masked multi-head self-attention followed by a feed-forward layer with GELU, with LayerNorm before each part and a residual connection around it. The mask stops each position from looking at later tokens.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+ & First model & Final model \\
+\midrule
+Layers / heads & 4 / 4 & 6 / 4 \\
+Embedding size & 192 & 256 \\
+Context length & 128 & 128 \\
+Dropout & 0.2 & 0.3 \\
+Parameters & 2.6M & 5.8M \\
+\bottomrule
+\end{tabular}
+\caption{Model size. The final settings came from the search in Section~\ref{sec:tuning}.}
+\end{table}
+
+Before training we wrote three tests (\texttt{tests/test\_model.py}): the output has shape (batch, length, 2000); changing future tokens does not change the output at earlier positions, so the mask works; and the model can memorise a single batch until the loss is close to zero. All three pass.
+
+\section{Training}
+
+Training batches are 32 random windows of 128 tokens from the encoded training text, so each step sees 4{,}096 tokens. We used AdamW with gradient clipping at 1.0 and a fixed seed (42). Every 250 steps we measured the loss on 50 random batches from the training and validation sets, saved the model as \texttt{best.pt} whenever the validation loss improved, and stopped early if it failed to improve four times in a row. We also saved a separate checkpoint every 500 steps.
+
+Our first model used a fixed learning rate of $3\times10^{-4}$. The final one warms up over 200 steps to $6\times10^{-4}$ and then follows a cosine curve down to 10\% of that, with weight decay 0.3. It ran for 5{,}000 steps, which is about 76 passes over the training tokens, and took \textbf{0.9 minutes} on an NVIDIA RTX 5070 Ti. The same run would take close to an hour on a laptop CPU: the first, smaller model needed 145 seconds for its first 250 steps on our CPU.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.82\textwidth, height=6.2cm, xlabel={step}, ylabel={loss}, grid=major,
+  grid style={gray!25}, legend pos=north east, xmin=0, xmax=5000, ymin=3, ymax=5.8]
+\addplot[thick, color=blue!70!black, mark=*, mark size=1.2pt] coordinates {%%TRAIN%%};
+\addplot[thick, color=orange!90!black, mark=*, mark size=1.2pt] coordinates {%%VAL%%};
+\legend{train, validation}
+\end{axis}
+\end{tikzpicture}
+\caption{Loss of the final model, measured every 250 steps. Validation loss levels off around step 2{,}500 while training loss keeps dropping, so the model is starting to memorise the training text. The best checkpoint was saved at step 4{,}250.}
+\end{figure}
+
+\section{Tuning on the validation set}
+\label{sec:tuning}
+
+Our first model reached a validation accuracy of 16.6\%. Because one run takes less than a minute, we could try several settings in two rounds. Each candidate was trained the same way, and we kept the checkpoint with the lowest validation loss, scored on the whole validation set. The test set was not loaded at all during this search.
+
+\begin{table}[H]
+\centering
+\small
+%%SWEEP%%
+\caption{All 14 runs, sorted by validation top-1 accuracy. WD is weight decay; ``tied'' means the input embedding and output layer share weights. Run D was trained twice with identical results, which shows the setup is reproducible.}
+\end{table}
+
+What we learned from this:
+\begin{itemize}
+\item \textbf{Regularisation helped most.} The training set is small (270k tokens), so the model overfits quickly. Raising weight decay from 0.1 to 0.3 gave the best result of all.
+\item \textbf{A bigger model only helps with that regularisation.} Six layers at 256 dimensions beat four at 192, but going to 384 dimensions (12M parameters) made things worse.
+\item \textbf{A longer context hurt.} With 256 tokens per window, each step saw twice as much text, so the model went through the data faster and overfit sooner.
+\item \textbf{Tying the embedding and output weights hurt clearly} in every combination we tried, by about 4 points.
+\item Too much dropout (0.4) was also worse than 0.3.
+\end{itemize}
+
+\section{Results}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Split & Loss & Perplexity & Top-1 accuracy & Top-5 accuracy \\
+\midrule
+%%ACC%%
+\bottomrule
+\end{tabular}
+\caption{Final model. Top-1 accuracy is how often the model's first guess for the next token is exactly right; top-5 is how often the right token is among its five best guesses. Guessing at random among 2{,}000 tokens would be right 0.05\% of the time.}
+\end{table}
+
+Compared with our first model, test loss went from 4.909 to 4.822, perplexity from 135.5 to 124.3, and top-1 accuracy from 15.6\% to 17.5\%. Validation and test scores are close to each other, so the result holds on text the model never saw. The large gap between training accuracy (31.0\%) and validation accuracy (18.1\%) confirms what the loss curve showed: with this little data, the model memorises part of the training set.
+
+We should be clear about one thing. We ran the test set once on the first model, before we decided to tune, and once more on the final model. All settings were chosen on validation data only, so the test numbers did not guide any decision. Still, the test set was used twice, not once.
+
+\subsection*{Generated samples}
+
+The samples below come from \texttt{src/evaluate.py} with temperature 0.8 and top-$k$ 50, each starting from the end-of-document token (as a new document does in training) followed by the prompt.
+
+%%SAMPLES%%
+
+The model has clearly picked up the style of Urdu news: datelines, ``according to'', the vocabulary of cricket and politics, and correct grammar inside short phrases. It does not keep a topic for long, it sometimes invents words by joining pieces that do not belong together, and it is weak with numbers. Because digits are separate tokens, it often writes long random strings of them (sample 3) and repeats words (sample 4). In the demo app we added a repetition penalty, which reduces the loops, but this does not change any of the scores above.
+
+\section{Limitations and what we would do next}
+
+\begin{itemize}
+\item \textbf{Data size is the real limit.} 270k training tokens is very little for a language model, and we were not allowed to add more. Most of our gains came from fighting overfitting, not from making the model bigger.
+\item \textbf{Numbers.} Replacing long numbers with a placeholder during cleaning would probably raise accuracy and make the samples read better, but it would change the tokenizer and every step after it, so we left it for future work.
+\item \textbf{Perplexity depends on the tokenizer.} As the brief says, our perplexity cannot be compared directly with a group that used BPE, because the two tokenizers split the same text into different numbers of tokens.
+\end{itemize}
+
+\section{Conclusion}
+
+We built the whole pipeline ourselves: cleaning, a Unigram tokenizer with exactly 2{,}000 tokens, encoding, a Transformer written from scratch, training with early stopping, and a careful final evaluation. The final model is small and quick to train, guesses the next token correctly about one time in six on unseen text, and writes Urdu that looks like news even if it does not always make sense. The most useful lesson for us was how much a small dataset changes the usual advice: on this task, regularisation mattered more than model size.
+
+\appendix
+\section{Files we submit}
+
+\begin{tabular}{ll}
+\toprule
+Item & Where \\
+\midrule
+(a) tokenizer and vocabulary size & SentencePiece Unigram, 2{,}000 tokens \\
+(b) tokenizer files & \texttt{tokenizer/urdu\_unigram.model}, \texttt{.vocab} \\
+(c) code & \texttt{src/}, \texttt{scripts/}, \texttt{tests/} \\
+(d) checkpoint & \texttt{checkpoints/best.pt} \\
+(e) token counts & \texttt{results/token\_counts.md} \\
+(f) losses, test loss, training time & \texttt{results/training.json}, \texttt{train\_log.txt}, \texttt{accuracy.json} \\
+(g) five samples & \texttt{results/samples.md} \\
+(h) this report & \texttt{report/report.pdf} \\
+\bottomrule
+\end{tabular}
+
+\end{document}
