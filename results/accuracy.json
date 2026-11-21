@@ -1,0 +1,23 @@
+{
+  "train": {
+    "tokens": 269378,
+    "loss": 3.2192,
+    "perplexity": 25.01,
+    "top1_accuracy": 30.99,
+    "top5_accuracy": 56.42
+  },
+  "val": {
+    "tokens": 34361,
+    "loss": 4.7284,
+    "perplexity": 113.12,
+    "top1_accuracy": 18.08,
+    "top5_accuracy": 37.96
+  },
+  "test": {
+    "tokens": 35013,
+    "loss": 4.8224,
+    "perplexity": 124.27,
+    "top1_accuracy": 17.46,
+    "top5_accuracy": 37.04
+  }
+}
