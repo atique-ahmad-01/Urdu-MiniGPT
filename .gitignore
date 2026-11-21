@@ -1,0 +1,62 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Testing / tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Secrets ---
+.env
+.env.*
+streamlit_app/.streamlit/secrets.toml
+
+# --- Model checkpoints (large, regenerable via src/train.py) ---
+checkpoints/
+baseline_v1/checkpoints/
+*.pt
+*.pth
+*.ckpt
+# Keep the single model the Streamlit app needs to run
+!streamlit_app/assets/best.pt
+
+# --- Generated data (regenerable via src/encode_data.py) ---
+data/encoded/
+*.npy
+
+# --- Archives / bundles ---
+*.zip
+
+# --- LaTeX build artifacts (keep report.tex and report.pdf) ---
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+
+# --- Misc run markers ---
+results/.finished
